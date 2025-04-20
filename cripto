@@ -1,0 +1,139 @@
+<!DOCTYPE html>
+<html lang="uk">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Шифрування за таблицею CP1251</title>
+  <script src="https://cdn.jsdelivr.net/npm/chart.js@2.9.4/dist/Chart.bundle.min.js"></script>
+  <style>
+    /* Темна тема */
+    body { font-family: Arial, sans-serif; background-color: #1e1e1e; color: #e0e0e0; margin: 0; padding: 20px; display: flex; flex-direction: column; align-items: center; }
+    .container { background: #2b2b2b; padding: 20px; border-radius: 8px; box-shadow: 0 2px 4px rgba(0,0,0,0.5); max-width: 600px; width: 100%; }
+    textarea, input[type="number"] { width: 100%; padding: 10px; margin: 10px 0; border-radius: 4px; border: 1px solid #444; background: #333; color: #e0e0e0; font-size: 1rem; }
+    a { color: #4aa3df; text-decoration: none; }
+    a:hover { text-decoration: underline; }
+    button { padding: 10px 20px; margin: 5px; font-size: 1rem; border: none; border-radius: 4px; background: #3a3a3a; color: #e0e0e0; cursor: pointer; }
+    button:hover { background: #505050; }
+    .buttons { display: flex; margin-bottom: 10px; }
+    .buttons button { margin-right: 10px; }
+    label { display: block; margin-top: 10px; }
+    /* Модальне вікно */
+    .modal { display: none; position: fixed; top: 0; left: 0; width: 100vw; height: 100vh; background: rgba(0,0,0,0.8); align-items: center; justify-content: center; z-index: 1000; }
+    .modal-content { background: #2b2b2b; padding: 20px; border-radius: 8px; max-width: 90vw; max-height: 90vh; overflow: auto; position: relative; }
+    .modal-close { position: absolute; bottom: 20px; left: 50%; transform: translateX(-50%); background: #ab0000; }
+    canvas { width: 100% !important; height: auto !important; }
+    table { width: 100%; border-collapse: collapse; margin-top: 10px; }
+    th, td { border: 1px solid #444; padding: 8px; text-align: center; color: #e0e0e0; }
+    th { background: #3a3a3a; }
+  </style>
+</head>
+<body>
+  <h2>Індивідуальне завдання до лабораторної роботи № 8 з курсу «Криптографічні системи та протоколи»</h2>
+  <p>Виконав: студент КБ‑302 Кобринович Р. В.</p>
+  <div class="container">
+    <h1>Шифрування методом зміщення</h1>
+    <p>Для шифрування використовується таблиця <a href="https://www.ascii-code.com/CP1251" target="_blank">ASCII CP1251</a>.</p>
+    <div class="buttons">
+      <button id="toggleModeBtn" title="Звичайний режим: усі символи зміщуються в один бік на вказаний зсув.">Режим: звичайний</button>
+    </div>
+    <label for="plaintext">Вхідний текст:</label>
+    <textarea id="plaintext" rows="4" placeholder="Введіть текст..."></textarea>
+    <div class="buttons">
+      <button id="encryptBtn">Шифрувати</button>
+      <button id="decryptBtn">Розшифрувати</button>
+      <button id="clearBtn" style="margin-left:auto;">Очистити поля</button>
+    </div>
+    <label for="shift">Зсув (ціле число):</label>
+    <input type="number" id="shift" value="3">
+    <label for="ciphertext">Результат:</label>
+    <textarea id="ciphertext" rows="4" readonly></textarea>
+    <div class="buttons">
+      <button id="showTableBtn">Показати таблицю шифрування</button>
+      <button id="showHistBtn">Показати гістограму</button>
+    </div>
+  </div>
+  <!-- Модальне вікно -->
+  <div id="modal" class="modal">
+    <div class="modal-content" id="modalContent"></div>
+    <button class="modal-close" id="modalClose">Закрити</button>
+  </div>
+  <script>
+  (function() {
+    const decoder = new TextDecoder('windows-1251');
+    const cp1251Chars = [];
+    for (let i = 32; i <= 255; i++) cp1251Chars.push(decoder.decode(new Uint8Array([i])));
+    const len = cp1251Chars.length;
+    let mode = 'normal';
+    const toggleBtn = document.getElementById('toggleModeBtn');
+    toggleBtn.addEventListener('click', () => {
+      mode = mode === 'normal' ? 'custom' : 'normal';
+      toggleBtn.textContent = mode === 'normal' ? 'Режим: звичайний' : 'Режим: удосконалений';
+      toggleBtn.title = mode === 'normal'
+        ? 'Звичайний режим: усі символи зміщуються в один бік на вказаний зсув.'
+        : 'Удосконалений режим: парні символи зміщуються вперед, непарні — назад.';
+    });
+    function shiftIndex(idx, delta) { return (idx + delta + len) % len; }
+    function normalCipher(txt, shift, decrypt = false) {
+      const d = decrypt ? -shift : shift;
+      return Array.from(txt).map(c => { const i = cp1251Chars.indexOf(c); return i < 0 ? c : cp1251Chars[shiftIndex(i, d)]; }).join('');
+    }
+    function customCipher(txt, shift, decrypt = false) {
+      return Array.from(txt).map((c, idx) => { const i = cp1251Chars.indexOf(c); if (i < 0) return c; const even = (idx + 1) % 2 === 0; const base = decrypt ? -shift : shift; const d = even ? base : -base; return cp1251Chars[shiftIndex(i, d)]; }).join('');
+    }
+    function processText(txt, shift, decrypt = false) {
+      return mode === 'normal' ? normalCipher(txt, shift, decrypt) : customCipher(txt, shift, decrypt);
+    }
+    document.getElementById('encryptBtn').addEventListener('click', () => {
+      const t = document.getElementById('plaintext').value;
+      const s = parseInt(document.getElementById('shift').value, 10) || 0;
+      document.getElementById('ciphertext').value = processText(t, s, false);
+    });
+    document.getElementById('decryptBtn').addEventListener('click', () => {
+      const t = document.getElementById('plaintext').value;
+      const s = parseInt(document.getElementById('shift').value, 10) || 0;
+      document.getElementById('ciphertext').value = processText(t, s, true);
+    });
+    document.getElementById('clearBtn').addEventListener('click', () => {
+      document.getElementById('plaintext').value = '';
+      document.getElementById('ciphertext').value = '';
+    });
+    const modal = document.getElementById('modal'), modalContent = document.getElementById('modalContent');
+    document.getElementById('modalClose').addEventListener('click', () => { modal.style.display = 'none'; modalContent.innerHTML = ''; });
+    document.getElementById('showTableBtn').addEventListener('click', () => {
+      const txt = document.getElementById('plaintext').value;
+      const s = parseInt(document.getElementById('shift').value, 10) || 0;
+      const enc = processText(txt, s, false);
+      const rows = Array.from(txt).map((c, i) => {
+        const inIdx = cp1251Chars.indexOf(c), outIdx = cp1251Chars.indexOf(enc[i]);
+        return `<tr><td>${c}</td><td>${inIdx<0?'–':inIdx+32}</td><td>${enc[i]||''}</td><td>${outIdx<0?'–':outIdx+32}</td></tr>`;
+      }).join('');
+      modalContent.innerHTML = `<table><tr><th>Символ вхідний</th><th>Код</th><th>Символ зашифрований</th><th>Код</th></tr>${rows}</table>`;
+      modal.style.display = 'flex';
+    });
+    document.getElementById('showHistBtn').addEventListener('click', () => {
+      const inp = document.getElementById('plaintext').value, out = document.getElementById('ciphertext').value;
+      const freq = txt => { const f={}; for(const ch of txt){ if(!ch.trim()) continue; f[ch]=(f[ch]||0)+1;} return f; };
+      const f1 = freq(inp), f2 = freq(out);
+      const labels = Array.from(new Set([...Object.keys(f1),...Object.keys(f2)])).sort();
+      const data1 = labels.map(l=>f1[l]||0), data2 = labels.map(l=>f2[l]||0);
+      modalContent.innerHTML = '<canvas id="modalChart"></canvas>';
+      modal.style.display = 'flex';
+      setTimeout(() => {
+        const ctx = document.getElementById('modalChart').getContext('2d');
+        new Chart(ctx, {
+          type: 'bar',
+          data: { labels, datasets: [ { label: 'Вхідний текст', data: data1, backgroundColor: '#4aa3df' }, { label: 'Результат', data: data2, backgroundColor: '#ff6384' } ] },
+          options: {
+            plugins: { title: { display: true, text: 'Гістограма частот символів' } },
+            scales: {
+              xAxes: [{ scaleLabel: { display: true, labelString: 'Символ' }, gridLines: { color: '#444' } }],
+              yAxes: [{ scaleLabel: { display: true, labelString: 'Частота' }, gridLines: { color: '#444' } }]
+            }
+          }
+        });
+      }, 0);
+    });
+  })();
+  </script>
+</body>
+</html>
